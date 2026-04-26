@@ -111,3 +111,4 @@ The role asks for someone who can *"design ideal-output standards based on lingu
 🤖 *Vibe-coded with Claude Code · April 2026*
 
 </div>
+
