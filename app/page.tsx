@@ -1,9 +1,16 @@
 'use client'
 import { useState, useEffect } from 'react'
-import { Star, Download, ArrowRight, Loader2, Check, Sparkles, Wand2, FileText, Quote, MessageCircle, Languages } from 'lucide-react'
+import { Star, Download, ArrowRight, Loader2, Check, Sparkles, Wand2, FileText, Quote, MessageCircle, Languages, GitCompare, Award } from 'lucide-react'
 
-type Pair = { question: string; answer: string; rating?: number }
+type Pair = {
+  question: string
+  answer: string
+  answer_b?: string                // DPO: alternative answer
+  rating?: number                  // SFT: 1-5 stars
+  preference?: 'a' | 'b' | 'tie'   // DPO: pairwise verdict
+}
 type Lang = 'zh' | 'en'
+type Mode = 'sft' | 'dpo'
 
 type Dict = {
   badge: string; hero_l1: string; hero_l2: string; hero_l3: string;
@@ -15,143 +22,136 @@ type Dict = {
   s1_title: string; s1_subtitle: string; placeholder_refs: string; char_unit: string;
   btn_extract: string; btn_extracting: string;
   s2_title: string; s2_subtitle: string; profile_label: string;
+  mode_label: string; mode_sft: string; mode_sft_desc: string; mode_dpo: string; mode_dpo_desc: string;
   topic_label: string; topic_desc: string; topic_placeholder: string;
   count_label: string; count_unit: string; btn_generate: string; btn_generating: string;
-  s3_title: string; s3_subtitle: string;
+  s3_title_sft: string; s3_subtitle_sft: string;
+  s3_title_dpo: string; s3_subtitle_dpo: string;
   stat_rated: string; stat_passing: string; stat_passing_sub: string;
+  stat_compared: string; stat_chosen: string; stat_chosen_sub: string;
   label_q: string; label_a: string; label_rate: string; label_into: string; label_excluded: string;
-  export_title: string; export_desc_pass: (n: number) => string; export_desc_empty: string; btn_export: string;
+  label_answer_a: string; label_answer_b: string;
+  pref_a: string; pref_b: string; pref_tie: string;
+  badge_chosen: string; badge_rejected: string; badge_tie: string;
+  export_title: string; export_desc_pass: (n: number) => string; export_desc_dpo: (n: number) => string; export_desc_empty_sft: string; export_desc_empty_dpo: string; btn_export: string;
   footer_tag: string; footer_credit: string;
 }
 
 const i18n: Record<Lang, Dict> = {
   zh: {
     badge: 'SFT DATA WORKSHOP',
-    hero_l1: 'Distill',
-    hero_l2: 'a writing',
-    hero_l3: 'voice.',
-    hero_desc1: '上传一段你想模仿的写作,提炼五维风格指纹,批量生成训练样本,一键导出 SFT 数据集。',
+    hero_l1: 'Distill', hero_l2: 'a writing', hero_l3: 'voice.',
+    hero_desc1: '上传一段你想模仿的写作,提炼五维风格指纹,批量生成训练样本,导出 SFT 或 DPO 数据集。',
     hero_desc2: 'For fine-tuning a language model that writes like someone specific.',
     cta_start: '开始制作',
-    cta_compat: '输出标准 JSONL · 兼容 LLaMA-Factory · TRL · Unsloth',
+    cta_compat: '输出 SFT / DPO JSONL · 兼容 LLaMA-Factory · TRL · Unsloth',
     pc1_badge: '01 — 参考文本',
     pc1_quote: '“我于是用了种种法,来麻醉自己的灵魂,使我沉入于国民中,使我回到古代去⋯”',
     pc1_caption: '参考样本 · 5–10 段',
     pc2_badge: '02 — 风格档案',
-    pc2_dim1: '句法',
-    pc2_val1: '文白交织',
-    pc2_dim2: '基调',
-    pc2_val2: '自嘲冷峻',
-    pc2_dim3: '指纹',
-    pc2_val3: '借古讽今',
-    pc3_badge: '03 — 评分导出',
-    pc3_caption: 'styleforge-sft.jsonl · 47 条 ≥4★',
-    progress1: '提取风格',
-    progress2: '生成样本',
-    progress3: '评分导出',
+    pc2_dim1: '句法', pc2_val1: '文白交织',
+    pc2_dim2: '基调', pc2_val2: '自嘲冷峻',
+    pc2_dim3: '指纹', pc2_val3: '借古讽今',
+    pc3_badge: '03 — 评分 / 对比',
+    pc3_caption: 'styleforge.jsonl · SFT 47 条 · DPO 32 对',
+    progress1: '提取风格', progress2: '生成样本', progress3: '评分 / 对比',
     s1_title: '参考文本',
     s1_subtitle: '粘贴来自同一位作者的 5–10 段写作样本。语料同源性越高,提取的风格指纹越清晰 (混入多位作者会稀释档案特征)。',
     placeholder_refs: `例如:\n"我于是用了种种法,来麻醉自己的灵魂,使我沉入于国民中,使我回到古代去⋯"\n"我自爱我的野草,但我憎恶这以野草作装饰的地面⋯"\n⋯`,
     char_unit: '字',
-    btn_extract: '抽取风格档案',
-    btn_extracting: '正在分析风格',
-    s2_title: '风格档案',
-    s2_subtitle: '基于你的参考,模型提炼出五维风格指纹与模仿建议。',
+    btn_extract: '抽取风格档案', btn_extracting: '正在分析风格',
+    s2_title: '风格档案 & 生成', s2_subtitle: '基于参考产出五维风格指纹,然后选择数据生产模式。',
     profile_label: 'Style Profile',
+    mode_label: '数据模式',
+    mode_sft: 'SFT 模式', mode_sft_desc: '单条 1-5★ 评分 → SFT JSONL · 训练阶段 1',
+    mode_dpo: 'DPO 模式', mode_dpo_desc: '两两 A/B 对比 → DPO JSONL · 训练阶段 2 (偏好对齐)',
     topic_label: '训练话题',
     topic_desc: '指定一个话题方向,模型将围绕它生成不同切入角度的对话样本',
     topic_placeholder: '例如: 关于深夜失眠',
-    count_label: '数量',
-    count_unit: '条',
-    btn_generate: '生成训练样本',
-    btn_generating: '正在生成',
-    s3_title: '评分 & 导出',
-    s3_subtitle: '像审稿人那样判断每条样本是否到位。≥4 星才会进入训练集。',
-    stat_rated: '已评样本',
-    stat_passing: '进入训练集',
-    stat_passing_sub: '≥4★',
-    label_q: 'Question',
-    label_a: 'Answer',
-    label_rate: 'Rate',
-    label_into: '✓ INTO TRAINING SET',
-    label_excluded: '✗ EXCLUDED',
+    count_label: '数量', count_unit: '条',
+    btn_generate: '生成训练样本', btn_generating: '正在生成',
+    s3_title_sft: '评分 & 导出', s3_subtitle_sft: '像审稿人那样判断每条样本是否到位。≥4 星才会进入训练集。',
+    s3_title_dpo: '两两对比 & 导出', s3_subtitle_dpo: '从每对回答中挑出"更符合理想态"的那个。挑选会被记录为 chosen,另一个为 rejected。',
+    stat_rated: '已评样本', stat_passing: '进入训练集', stat_passing_sub: '≥4★',
+    stat_compared: '已对比', stat_chosen: '形成偏好对', stat_chosen_sub: 'chosen / rejected',
+    label_q: 'Question', label_a: 'Answer', label_rate: 'Rate',
+    label_into: '✓ INTO TRAINING SET', label_excluded: '✗ EXCLUDED',
+    label_answer_a: 'Answer A', label_answer_b: 'Answer B',
+    pref_a: 'A 更好', pref_b: 'B 更好', pref_tie: '差不多',
+    badge_chosen: '✓ CHOSEN', badge_rejected: '✗ REJECTED', badge_tie: '∼ TIE (跳过)',
     export_title: '导出训练数据',
-    export_desc_pass: (n: number) => `打包 ${n} 条 ≥4★ 样本为标准 SFT JSONL`,
-    export_desc_empty: '请先给至少一条样本打 4 星以上',
+    export_desc_pass: (n) => `打包 ${n} 条 ≥4★ 样本为标准 SFT JSONL`,
+    export_desc_dpo: (n) => `打包 ${n} 对偏好为标准 DPO JSONL`,
+    export_desc_empty_sft: '请先给至少一条样本打 4 星以上',
+    export_desc_empty_dpo: '请先在至少一对中明确选出 A 或 B',
     btn_export: '导出 JSONL',
-    footer_tag: 'a vibe-coded SFT data tool',
+    footer_tag: 'a vibe-coded SFT/DPO data tool',
     footer_credit: 'Tokens · Pinterest Gestalt · Aesthetic · Apple HIG',
   },
   en: {
     badge: 'SFT DATA WORKSHOP',
-    hero_l1: 'Distill',
-    hero_l2: 'a writing',
-    hero_l3: 'voice.',
-    hero_desc1: 'Upload writing samples to extract a 5-dim style fingerprint, batch-generate training pairs, and export an SFT-ready dataset in one click.',
+    hero_l1: 'Distill', hero_l2: 'a writing', hero_l3: 'voice.',
+    hero_desc1: 'Upload writing samples to extract a 5-dim style fingerprint, batch-generate training pairs, and export SFT or DPO datasets.',
     hero_desc2: 'For fine-tuning a language model that writes like someone specific.',
     cta_start: 'Get started',
-    cta_compat: 'Standard JSONL · LLaMA-Factory · TRL · Unsloth ready',
+    cta_compat: 'SFT / DPO JSONL · LLaMA-Factory · TRL · Unsloth ready',
     pc1_badge: '01 — Reference',
     pc1_quote: '“We tell ourselves stories in order to live. We look for the sermon in the suicide, for the social or moral lesson in the murder of five⋯”',
     pc1_caption: 'Reference sample · 5–10 paragraphs',
     pc2_badge: '02 — Profile',
-    pc2_dim1: 'Syntax',
-    pc2_val1: 'Crystalline',
-    pc2_dim2: 'Tone',
-    pc2_val2: 'Diagnostic',
-    pc2_dim3: 'Mark',
-    pc2_val3: 'Self-implicating',
-    pc3_badge: '03 — Export',
-    pc3_caption: 'styleforge-sft.jsonl · 47 samples ≥4★',
-    progress1: 'Extract',
-    progress2: 'Generate',
-    progress3: 'Rate & Export',
+    pc2_dim1: 'Syntax', pc2_val1: 'Crystalline',
+    pc2_dim2: 'Tone', pc2_val2: 'Diagnostic',
+    pc2_dim3: 'Mark', pc2_val3: 'Self-implicating',
+    pc3_badge: '03 — Rate / Compare',
+    pc3_caption: 'styleforge.jsonl · 47 SFT · 32 DPO',
+    progress1: 'Extract', progress2: 'Generate', progress3: 'Rate / Compare',
     s1_title: 'Reference Texts',
     s1_subtitle: 'Paste 5–10 writing samples from a single author. Higher source consistency yields a sharper style fingerprint (mixing authors dilutes the profile).',
     placeholder_refs: `e.g.\n"We tell ourselves stories in order to live. We interpret what we see, select the most workable of the multiple choices..."\n"All writers are vain, selfish, and lazy, and at the very bottom of their motives there lies a mystery..."\n⋯`,
     char_unit: 'chars',
-    btn_extract: 'Extract Profile',
-    btn_extracting: 'Analyzing',
-    s2_title: 'Style Profile',
-    s2_subtitle: 'A 5-dimensional fingerprint and mimicry guidelines, distilled from your references.',
+    btn_extract: 'Extract Profile', btn_extracting: 'Analyzing',
+    s2_title: 'Profile & Generation', s2_subtitle: 'Distill a 5-dim profile, then pick a data-production mode.',
     profile_label: 'Style Profile',
+    mode_label: 'Data Mode',
+    mode_sft: 'SFT Mode', mode_sft_desc: 'Single 1-5★ rating → SFT JSONL · stage 1 fine-tuning',
+    mode_dpo: 'DPO Mode', mode_dpo_desc: 'Pairwise A/B comparison → DPO JSONL · stage 2 preference alignment',
     topic_label: 'Topic',
     topic_desc: 'Pick a topic; the model will produce dialogue samples from different angles around it.',
     topic_placeholder: 'e.g. On late-night insomnia',
-    count_label: 'Count',
-    count_unit: 'samples',
-    btn_generate: 'Generate samples',
-    btn_generating: 'Generating',
-    s3_title: 'Rate & Export',
-    s3_subtitle: 'Judge each sample like an editor would. Only ≥4★ samples enter the training set.',
-    stat_rated: 'Rated',
-    stat_passing: 'In training set',
-    stat_passing_sub: '≥4★',
-    label_q: 'Question',
-    label_a: 'Answer',
-    label_rate: 'Rate',
-    label_into: '✓ INTO TRAINING SET',
-    label_excluded: '✗ EXCLUDED',
+    count_label: 'Count', count_unit: 'samples',
+    btn_generate: 'Generate samples', btn_generating: 'Generating',
+    s3_title_sft: 'Rate & Export', s3_subtitle_sft: 'Judge each sample like an editor would. Only ≥4★ samples enter the training set.',
+    s3_title_dpo: 'Pairwise & Export', s3_subtitle_dpo: 'For each pair, pick the answer that better fits the ideal. The chosen becomes "chosen", the other "rejected".',
+    stat_rated: 'Rated', stat_passing: 'In training set', stat_passing_sub: '≥4★',
+    stat_compared: 'Compared', stat_chosen: 'Preference pairs', stat_chosen_sub: 'chosen / rejected',
+    label_q: 'Question', label_a: 'Answer', label_rate: 'Rate',
+    label_into: '✓ INTO TRAINING SET', label_excluded: '✗ EXCLUDED',
+    label_answer_a: 'Answer A', label_answer_b: 'Answer B',
+    pref_a: 'A wins', pref_b: 'B wins', pref_tie: 'Tie',
+    badge_chosen: '✓ CHOSEN', badge_rejected: '✗ REJECTED', badge_tie: '∼ TIE (skipped)',
     export_title: 'Export Training Data',
-    export_desc_pass: (n: number) => `Package ${n} samples (≥4★) as standard SFT JSONL`,
-    export_desc_empty: 'Rate at least one sample 4★+ first',
+    export_desc_pass: (n) => `Package ${n} samples (≥4★) as standard SFT JSONL`,
+    export_desc_dpo: (n) => `Package ${n} preference pairs as standard DPO JSONL`,
+    export_desc_empty_sft: 'Rate at least one sample 4★+ first',
+    export_desc_empty_dpo: 'Pick A or B in at least one pair first',
     btn_export: 'Export JSONL',
-    footer_tag: 'a vibe-coded SFT data tool',
+    footer_tag: 'a vibe-coded SFT/DPO data tool',
     footer_credit: 'Tokens · Pinterest Gestalt · Aesthetic · Apple HIG',
   },
 }
 
 export default function Home() {
   const [lang, setLang] = useState<Lang>('zh')
+  const [mode, setMode] = useState<Mode>('sft')
   const [refs, setRefs] = useState('')
   const [profile, setProfile] = useState('')
   const [topic, setTopic] = useState('')
   const [count, setCount] = useState(5)
   const [pairs, setPairs] = useState<Pair[]>([])
+  const [activeMode, setActiveMode] = useState<Mode>('sft') // mode of currently-loaded pairs
   const [loading, setLoading] = useState<'extract' | 'generate' | null>(null)
   const [error, setError] = useState('')
 
-  // Persist language choice
   useEffect(() => {
     const saved = localStorage.getItem('styleforge-lang') as Lang | null
     if (saved === 'en' || saved === 'zh') setLang(saved)
@@ -186,37 +186,62 @@ export default function Home() {
       const r = await fetch('/api/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ profile, topic, count })
+        body: JSON.stringify({ profile, topic, count, mode })
       })
       if (!r.ok) throw new Error(await r.text())
       const data = await r.json()
       setPairs(data.pairs)
+      setActiveMode(mode)
       setTimeout(() => document.getElementById('step-3')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100)
     } catch (e: any) { setError(e.message) }
     finally { setLoading(null) }
   }
 
-  function rate(i: number, r: number) {
+  function setRating(i: number, r: number) {
     const next = [...pairs]; next[i] = { ...next[i], rating: r }; setPairs(next)
   }
 
-  function exportJSONL() {
-    const data = pairs
-      .filter(p => (p.rating ?? 0) >= 4)
-      .map(p => JSON.stringify({
-        messages: [
-          { role: 'user', content: p.question },
-          { role: 'assistant', content: p.answer }
-        ]
-      }))
-      .join('\n')
-    const blob = new Blob([data], { type: 'application/jsonl' })
-    const a = document.createElement('a')
-    a.href = URL.createObjectURL(blob); a.download = 'styleforge-sft.jsonl'; a.click()
+  function setPreference(i: number, p: 'a' | 'b' | 'tie') {
+    const next = [...pairs]; next[i] = { ...next[i], preference: p }; setPairs(next)
   }
 
-  const highRated = pairs.filter(p => (p.rating ?? 0) >= 4).length
-  const ratedCount = pairs.filter(p => p.rating !== undefined).length
+  function exportJSONL() {
+    let data: string
+    let filename: string
+    if (activeMode === 'sft') {
+      data = pairs
+        .filter(p => (p.rating ?? 0) >= 4)
+        .map(p => JSON.stringify({
+          messages: [
+            { role: 'user', content: p.question },
+            { role: 'assistant', content: p.answer }
+          ]
+        }))
+        .join('\n')
+      filename = 'styleforge-sft.jsonl'
+    } else {
+      data = pairs
+        .filter(p => p.preference === 'a' || p.preference === 'b')
+        .map(p => JSON.stringify({
+          prompt: p.question,
+          chosen: p.preference === 'a' ? p.answer : p.answer_b,
+          rejected: p.preference === 'a' ? p.answer_b : p.answer
+        }))
+        .join('\n')
+      filename = 'styleforge-dpo.jsonl'
+    }
+    const blob = new Blob([data], { type: 'application/jsonl' })
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(blob); a.download = filename; a.click()
+  }
+
+  // Stats — depend on active mode
+  const sftRated = pairs.filter(p => p.rating !== undefined).length
+  const sftPassing = pairs.filter(p => (p.rating ?? 0) >= 4).length
+  const dpoCompared = pairs.filter(p => p.preference !== undefined).length
+  const dpoPairs = pairs.filter(p => p.preference === 'a' || p.preference === 'b').length
+
+  const exportable = activeMode === 'sft' ? sftPassing : dpoPairs
   const currentStep = pairs.length > 0 ? 3 : profile ? 2 : 1
 
   return (
@@ -244,7 +269,7 @@ export default function Home() {
             <div className="animate-fadeUp">
               <div className="inline-flex items-center gap-200 px-300 py-100 rounded-pill bg-mochimalist/80 backdrop-blur-md shadow-glass text-100 font-bold text-pushpin-450 mb-700">
                 <Sparkles className="w-3.5 h-3.5" />
-                <span className="tracking-[0.18em]">{t.badge.replace(/ /g, ' ')}</span>
+                <span className="tracking-[0.18em]">{t.badge}</span>
               </div>
 
               <h1 className="font-bold tracking-[-0.04em] text-cosmicore leading-[0.92] mb-500" style={{ fontSize: 'clamp(52px, 8.5vw, 96px)' }}>
@@ -298,12 +323,14 @@ export default function Home() {
                 className="absolute bottom-0 left-12 w-80 animate-floatC"
                 badge={t.pc3_badge}
                 badgeColor="bg-pushpin-450 text-mochimalist"
-                icon={<Star className="w-3.5 h-3.5 fill-current" />}
+                icon={<GitCompare className="w-3.5 h-3.5" />}
               >
                 <div className="flex items-center gap-200 mb-200">
                   {[1, 2, 3, 4, 5].map(r => (
                     <Star key={r} className={`w-4 h-4 ${r <= 4 ? 'fill-pushpin-450 text-pushpin-450' : 'text-roboflow-200'}`} strokeWidth={1.5} />
                   ))}
+                  <span className="text-100 font-mono text-roboflow-400 ml-100">/</span>
+                  <span className="text-100 font-mono font-bold text-pushpin-450">A&nbsp;vs&nbsp;B</span>
                 </div>
                 <p className="text-100 font-mono text-roboflow-500">{t.pc3_caption}</p>
               </PreviewCard>
@@ -388,36 +415,63 @@ export default function Home() {
             )}
 
             {profile && (
-              <div className="mt-600 rounded-400 bg-mochimalist shadow-floating overflow-hidden">
-                <div className="px-600 pt-500 pb-100">
-                  <label className="text-100 font-bold uppercase tracking-[0.18em] text-roboflow-500">{t.topic_label}</label>
-                  <p className="text-100 text-roboflow-400 mt-100">{t.topic_desc}</p>
-                </div>
-                <input
-                  className="w-full px-600 pb-400 text-400 bg-transparent outline-none placeholder:text-roboflow-300"
-                  placeholder={t.topic_placeholder}
-                  value={topic}
-                  onChange={e => setTopic(e.target.value)}
-                />
-                <div className="flex flex-wrap items-center justify-between gap-300 px-600 py-300 border-t border-roboflow-100">
-                  <div className="flex items-center gap-300">
-                    <span className="text-100 font-bold uppercase tracking-[0.18em] text-roboflow-500">{t.count_label}</span>
-                    <CountStepper value={count} onChange={setCount} />
-                    <span className="text-100 text-roboflow-500">{t.count_unit} <span className="font-mono text-roboflow-400">(1–20)</span></span>
+              <>
+                {/* Mode selector */}
+                <div className="mt-600 mb-400">
+                  <div className="text-100 font-bold uppercase tracking-[0.18em] text-roboflow-500 mb-300">
+                    {t.mode_label}
                   </div>
-                  <button
-                    onClick={generate}
-                    disabled={loading !== null || !topic.trim() || count < 1}
-                    className="inline-flex items-center gap-200 px-500 py-200 rounded-pill bg-pushpin-450 text-mochimalist text-200 font-semibold transition-all duration-500 ease-apple hover:bg-pushpin-500 hover:shadow-raised hover:-translate-y-0.5 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:translate-y-0"
-                  >
-                    {loading === 'generate' ? (
-                      <><Loader2 className="w-4 h-4 animate-spin" />{t.btn_generating}</>
-                    ) : (
-                      <><Wand2 className="w-4 h-4" />{t.btn_generate}</>
-                    )}
-                  </button>
+                  <div className="grid sm:grid-cols-2 gap-300">
+                    <ModeCard
+                      active={mode === 'sft'}
+                      onClick={() => setMode('sft')}
+                      title={t.mode_sft}
+                      desc={t.mode_sft_desc}
+                      icon={<Star className="w-4 h-4" />}
+                    />
+                    <ModeCard
+                      active={mode === 'dpo'}
+                      onClick={() => setMode('dpo')}
+                      title={t.mode_dpo}
+                      desc={t.mode_dpo_desc}
+                      icon={<GitCompare className="w-4 h-4" />}
+                    />
+                  </div>
                 </div>
-              </div>
+
+                <div className="rounded-400 bg-mochimalist shadow-floating overflow-hidden">
+                  <div className="px-600 pt-500 pb-100">
+                    <label className="text-100 font-bold uppercase tracking-[0.18em] text-roboflow-500">{t.topic_label}</label>
+                    <p className="text-100 text-roboflow-400 mt-100">{t.topic_desc}</p>
+                  </div>
+                  <input
+                    className="w-full px-600 pb-400 text-400 bg-transparent outline-none placeholder:text-roboflow-300"
+                    placeholder={t.topic_placeholder}
+                    value={topic}
+                    onChange={e => setTopic(e.target.value)}
+                  />
+                  <div className="flex flex-wrap items-center justify-between gap-300 px-600 py-300 border-t border-roboflow-100">
+                    <div className="flex items-center gap-300">
+                      <span className="text-100 font-bold uppercase tracking-[0.18em] text-roboflow-500">{t.count_label}</span>
+                      <CountStepper value={count} onChange={setCount} />
+                      <span className="text-100 text-roboflow-500">{t.count_unit} <span className="font-mono text-roboflow-400">(1–20)</span></span>
+                    </div>
+                    <button
+                      onClick={generate}
+                      disabled={loading !== null || !topic.trim() || count < 1}
+                      className="inline-flex items-center gap-200 px-500 py-200 rounded-pill bg-pushpin-450 text-mochimalist text-200 font-semibold transition-all duration-500 ease-apple hover:bg-pushpin-500 hover:shadow-raised hover:-translate-y-0.5 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:translate-y-0"
+                    >
+                      {loading === 'generate' ? (
+                        <><Loader2 className="w-4 h-4 animate-spin" />{t.btn_generating}</>
+                      ) : mode === 'dpo' ? (
+                        <><GitCompare className="w-4 h-4" />{t.btn_generate}</>
+                      ) : (
+                        <><Wand2 className="w-4 h-4" />{t.btn_generate}</>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              </>
             )}
           </section>
         )}
@@ -425,35 +479,54 @@ export default function Home() {
         {/* Step 3 */}
         {(pairs.length > 0 || loading === 'generate') && (
           <section id="step-3" className="mb-1000 scroll-mt-8 animate-fadeUp">
-            <SectionHeader number="03" title={t.s3_title} subtitle={t.s3_subtitle} />
+            <SectionHeader
+              number="03"
+              title={activeMode === 'sft' ? t.s3_title_sft : t.s3_title_dpo}
+              subtitle={activeMode === 'sft' ? t.s3_subtitle_sft : t.s3_subtitle_dpo}
+            />
 
             {loading === 'generate' && pairs.length === 0 ? (
               <PairsSkeleton />
             ) : (
               <>
                 <div className="mb-500 grid grid-cols-2 gap-400">
-                  <StatCard label={t.stat_rated} value={`${ratedCount} / ${pairs.length}`} tone="neutral" />
-                  <StatCard label={t.stat_passing} value={`${highRated}`} sub={t.stat_passing_sub} tone="accent" />
+                  {activeMode === 'sft' ? (
+                    <>
+                      <StatCard label={t.stat_rated} value={`${sftRated} / ${pairs.length}`} tone="neutral" />
+                      <StatCard label={t.stat_passing} value={`${sftPassing}`} sub={t.stat_passing_sub} tone="accent" />
+                    </>
+                  ) : (
+                    <>
+                      <StatCard label={t.stat_compared} value={`${dpoCompared} / ${pairs.length}`} tone="neutral" />
+                      <StatCard label={t.stat_chosen} value={`${dpoPairs}`} sub={t.stat_chosen_sub} tone="accent" />
+                    </>
+                  )}
                 </div>
 
                 <div className="space-y-300">
                   {pairs.map((p, i) => (
-                    <PairCard key={i} index={i} pair={p} onRate={r => rate(i, r)} t={t} />
+                    activeMode === 'sft' ? (
+                      <PairCardSFT key={i} index={i} pair={p} onRate={r => setRating(i, r)} t={t} />
+                    ) : (
+                      <PairCardDPO key={i} index={i} pair={p} onPick={pref => setPreference(i, pref)} t={t} />
+                    )
                   ))}
                 </div>
 
-                <div className="mt-800 flex items-center justify-between rounded-400 bg-cosmicore p-600 shadow-lift overflow-hidden relative">
+                <div className="mt-800 flex items-center justify-between rounded-400 bg-cosmicore p-600 shadow-lift overflow-hidden relative gap-400">
                   <div className="absolute inset-0 bg-gradient-to-br from-pushpin-450/20 to-transparent" aria-hidden />
                   <div className="relative">
                     <div className="text-200 font-bold text-mochimalist">{t.export_title}</div>
                     <div className="text-100 text-roboflow-300 mt-100">
-                      {highRated > 0 ? t.export_desc_pass(highRated) : t.export_desc_empty}
+                      {exportable > 0
+                        ? activeMode === 'sft' ? t.export_desc_pass(exportable) : t.export_desc_dpo(exportable)
+                        : activeMode === 'sft' ? t.export_desc_empty_sft : t.export_desc_empty_dpo}
                     </div>
                   </div>
                   <button
                     onClick={exportJSONL}
-                    disabled={highRated === 0}
-                    className="relative inline-flex items-center gap-200 px-500 py-300 rounded-pill bg-pushpin-450 text-mochimalist text-200 font-semibold transition-all duration-500 ease-apple hover:bg-pushpin-500 hover:shadow-lift hover:-translate-y-0.5 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:translate-y-0"
+                    disabled={exportable === 0}
+                    className="relative shrink-0 inline-flex items-center gap-200 px-500 py-300 rounded-pill bg-pushpin-450 text-mochimalist text-200 font-semibold transition-all duration-500 ease-apple hover:bg-pushpin-500 hover:shadow-lift hover:-translate-y-0.5 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:translate-y-0"
                   >
                     <Download className="w-4 h-4" />
                     {t.btn_export}
@@ -522,6 +595,27 @@ function ProfileTag({ label, value }: { label: string; value: string }) {
   )
 }
 
+function ModeCard({ active, onClick, title, desc, icon }: { active: boolean; onClick: () => void; title: string; desc: string; icon: React.ReactNode }) {
+  return (
+    <button
+      onClick={onClick}
+      className={`text-left rounded-400 p-500 transition-all duration-500 ease-apple ${
+        active
+          ? 'bg-cosmicore text-mochimalist shadow-raised ring-2 ring-pushpin-450 ring-offset-2 ring-offset-canvas'
+          : 'bg-mochimalist text-cosmicore shadow-floating hover:shadow-lift hover:-translate-y-0.5'
+      }`}
+    >
+      <div className={`flex items-center gap-200 mb-200 ${active ? 'text-pushpin-450' : 'text-pushpin-450'}`}>
+        {icon}
+        <span className="text-200 font-bold">{title}</span>
+      </div>
+      <p className={`text-100 leading-relaxed ${active ? 'text-roboflow-300' : 'text-roboflow-600'}`}>
+        {desc}
+      </p>
+    </button>
+  )
+}
+
 function CountStepper({ value, onChange }: { value: number; onChange: (n: number) => void }) {
   const clamp = (n: number) => Math.max(1, Math.min(20, n))
   const dec = () => onChange(clamp(value - 1))
@@ -574,7 +668,7 @@ function StatCard({ label, value, sub, tone }: { label: string; value: string; s
   )
 }
 
-function PairCard({ index, pair, onRate, t }: { index: number; pair: Pair; onRate: (r: number) => void; t: Dict }) {
+function PairCardSFT({ index, pair, onRate, t }: { index: number; pair: Pair; onRate: (r: number) => void; t: Dict }) {
   const isHigh = (pair.rating ?? 0) >= 4
   const isLow = pair.rating !== undefined && pair.rating < 4
   return (
@@ -632,6 +726,107 @@ function PairCard({ index, pair, onRate, t }: { index: number; pair: Pair; onRat
         </div>
       </div>
     </article>
+  )
+}
+
+function PairCardDPO({ index, pair, onPick, t }: { index: number; pair: Pair; onPick: (p: 'a' | 'b' | 'tie') => void; t: Dict }) {
+  const picked = pair.preference
+  const cardRing = picked === 'a' || picked === 'b' ? 'shadow-raised ring-2 ring-pushpin-450/30' : picked === 'tie' ? 'shadow-floating opacity-70' : 'shadow-floating'
+  return (
+    <article className={`rounded-400 bg-mochimalist transition-all duration-500 ease-apple hover:shadow-lift ${cardRing}`}>
+      <div className="p-600 sm:p-700">
+        <div className="flex items-start gap-400 mb-500">
+          <span className={`shrink-0 w-1100 h-1100 rounded-pill flex items-center justify-center font-mono text-100 font-bold tabular-nums transition-colors duration-300 ${
+            picked && picked !== 'tie' ? 'bg-pushpin-450 text-mochimalist' : 'bg-roboflow-100 text-roboflow-500'
+          }`}>{String(index + 1).padStart(2, '0')}</span>
+          <div className="flex-1 pt-100">
+            <div className="flex items-center gap-200 text-100 font-bold uppercase tracking-[0.18em] text-roboflow-500 mb-200">
+              <MessageCircle className="w-3 h-3" />
+              {t.label_q}
+            </div>
+            <p className="text-300 leading-relaxed text-cosmicore">{pair.question}</p>
+          </div>
+        </div>
+
+        {/* A vs B side-by-side */}
+        <div className="grid md:grid-cols-2 gap-300 mb-500">
+          <AnswerSide
+            label={t.label_answer_a}
+            content={pair.answer}
+            verdict={picked === 'a' ? 'chosen' : picked === 'b' ? 'rejected' : picked === 'tie' ? 'tie' : null}
+            chosenLabel={t.badge_chosen}
+            rejectedLabel={t.badge_rejected}
+            tieLabel={t.badge_tie}
+          />
+          <AnswerSide
+            label={t.label_answer_b}
+            content={pair.answer_b ?? ''}
+            verdict={picked === 'b' ? 'chosen' : picked === 'a' ? 'rejected' : picked === 'tie' ? 'tie' : null}
+            chosenLabel={t.badge_chosen}
+            rejectedLabel={t.badge_rejected}
+            tieLabel={t.badge_tie}
+          />
+        </div>
+
+        {/* pick controls */}
+        <div className="flex items-center justify-center gap-200 pt-400 border-t border-roboflow-100">
+          <PickButton active={picked === 'a'} onClick={() => onPick('a')} variant="accent">
+            <Award className="w-3.5 h-3.5" /> {t.pref_a}
+          </PickButton>
+          <PickButton active={picked === 'tie'} onClick={() => onPick('tie')} variant="neutral">
+            ∼ {t.pref_tie}
+          </PickButton>
+          <PickButton active={picked === 'b'} onClick={() => onPick('b')} variant="accent">
+            {t.pref_b} <Award className="w-3.5 h-3.5" />
+          </PickButton>
+        </div>
+      </div>
+    </article>
+  )
+}
+
+function AnswerSide({ label, content, verdict, chosenLabel, rejectedLabel, tieLabel }: {
+  label: string
+  content: string
+  verdict: 'chosen' | 'rejected' | 'tie' | null
+  chosenLabel: string
+  rejectedLabel: string
+  tieLabel: string
+}) {
+  const ring =
+    verdict === 'chosen' ? 'ring-2 ring-pushpin-450 bg-pushpin-50/40' :
+    verdict === 'rejected' ? 'opacity-40' :
+    verdict === 'tie' ? 'opacity-70' :
+    ''
+  const badge =
+    verdict === 'chosen' ? <span className="text-100 font-mono font-bold px-200 py-100 rounded-pill bg-pushpin-450 text-mochimalist tracking-wider">{chosenLabel}</span> :
+    verdict === 'rejected' ? <span className="text-100 font-mono font-bold px-200 py-100 rounded-pill bg-roboflow-200 text-roboflow-600 tracking-wider">{rejectedLabel}</span> :
+    verdict === 'tie' ? <span className="text-100 font-mono font-bold px-200 py-100 rounded-pill bg-roboflow-100 text-roboflow-500 tracking-wider">{tieLabel}</span> :
+    null
+  return (
+    <div className={`rounded-400 bg-mochimalist border border-roboflow-100 p-500 transition-all duration-300 ease-apple ${ring}`}>
+      <div className="flex items-center justify-between mb-300">
+        <span className="text-100 font-bold uppercase tracking-[0.18em] text-pushpin-450">{label}</span>
+        {badge}
+      </div>
+      <p className="font-display text-200 leading-[1.75] text-roboflow-700 whitespace-pre-wrap tracking-tight">{content}</p>
+    </div>
+  )
+}
+
+function PickButton({ active, onClick, variant, children }: { active: boolean; onClick: () => void; variant: 'accent' | 'neutral'; children: React.ReactNode }) {
+  const base = 'inline-flex items-center gap-200 px-400 py-200 rounded-pill text-100 font-bold transition-all duration-300 ease-apple uppercase tracking-wider'
+  const styles = active
+    ? variant === 'accent'
+      ? 'bg-pushpin-450 text-mochimalist shadow-raised'
+      : 'bg-cosmicore text-mochimalist shadow-raised'
+    : variant === 'accent'
+      ? 'bg-mochimalist text-pushpin-450 shadow-floating hover:shadow-raised hover:-translate-y-0.5'
+      : 'bg-roboflow-50 text-roboflow-600 hover:bg-roboflow-100'
+  return (
+    <button onClick={onClick} className={`${base} ${styles}`}>
+      {children}
+    </button>
   )
 }
 
