@@ -20,6 +20,7 @@ type Dict = {
   pc3_badge: string; pc3_caption: string;
   progress1: string; progress2: string; progress3: string;
   s1_title: string; s1_subtitle: string; placeholder_refs: string; char_unit: string;
+  btn_fill_sample: string; sample_text: string;
   btn_extract: string; btn_extracting: string;
   s2_title: string; s2_subtitle: string; profile_label: string;
   mode_label: string; mode_sft: string; mode_sft_desc: string; mode_dpo: string; mode_dpo_desc: string;
@@ -59,6 +60,16 @@ const i18n: Record<Lang, Dict> = {
     s1_subtitle: '粘贴来自同一位作者的 5–10 段写作样本。语料同源性越高,提取的风格指纹越清晰 (混入多位作者会稀释档案特征)。',
     placeholder_refs: `例如:\n"我于是用了种种法,来麻醉自己的灵魂,使我沉入于国民中,使我回到古代去⋯"\n"我自爱我的野草,但我憎恶这以野草作装饰的地面⋯"\n⋯`,
     char_unit: '字',
+    btn_fill_sample: '一键填入范例样本',
+    sample_text: `我于是用了种种法,来麻醉自己的灵魂,使我沉入于国民中,使我回到古代去。后来也亲历或旁观过几样更寂寞更悲哀的事,都为我所不愿追怀,甘心使他们和我的脑一同消灭在泥土里的。
+
+我自爱我的野草,但我憎恶这以野草作装饰的地面。地火在地下运行,奔突;熔岩一旦喷出,将烧尽一切野草,以及乔木,于是并且无可朽腐。
+
+S 会馆里有三间屋,相传是往昔曾在院子里的槐树上缢死过一个女人的,现在槐树已经高不可攀了,而这屋还没有人住;许多年,我便寓在这屋里钞古碑。客中少有人来,古碑中也遇不到什么问题和主义,而我的生命却居然暗暗的消去了,这也就是我惟一的愿望。
+
+假如一间铁屋子,是绝无窗户而万难破毁的,里面有许多熟睡的人们,不久都要闷死了,然而是从昏睡入死灭,并不感到就死的悲哀。现在你大嚷起来,惊起了较为清醒的几个人,使这不幸的少数者来受无可挽救的临终的苦楚,你倒以为对得起他们么?
+
+我向来不惮以最坏的恶意来推测人心,然而我又不料,竟会下劣凶残到这地步。况且始终微笑的和蔼的人,更何至于无端在府门前被毒打呢?`,
     btn_extract: '抽取风格档案', btn_extracting: '正在分析风格',
     s2_title: '风格档案 & 生成', s2_subtitle: '基于参考产出五维风格指纹,然后选择数据生产模式。',
     profile_label: 'Style Profile',
@@ -109,6 +120,16 @@ const i18n: Record<Lang, Dict> = {
     s1_subtitle: 'Paste 5–10 writing samples from a single author. Higher source consistency yields a sharper style fingerprint (mixing authors dilutes the profile).',
     placeholder_refs: `e.g.\n"We tell ourselves stories in order to live. We interpret what we see, select the most workable of the multiple choices..."\n"All writers are vain, selfish, and lazy, and at the very bottom of their motives there lies a mystery..."\n⋯`,
     char_unit: 'chars',
+    btn_fill_sample: 'Try a sample',
+    sample_text: `We tell ourselves stories in order to live. The princess is caged in the consulate. The man with the candy will lead the children into the sea. The naked woman on the ledge outside the window on the sixteenth floor is a victim of accidie, or the naked woman is an exhibitionist, and it would be "interesting" to know which.
+
+I have already lost touch with a couple of people I used to be; one of them, a seventeen-year-old, presents little threat, although it would be of some interest to me to know again what it feels like to sit on a river levee drinking vodka-and-orange-juice and listening to Les Paul and Mary Ford and their echoes sing "How High the Moon" on the car radio.
+
+I write entirely to find out what I'm thinking, what I'm looking at, what I see and what it means. What I want and what I fear.
+
+When I was younger I never thought of myself as anything but a writer, but somewhere along the line I had stopped thinking of myself as a reporter, which had been a job. Reporting required leaving home, which was now exactly what I did not want to do.
+
+To free us from the expectations of others, to give us back to ourselves — there lies the great, singular power of self-respect. Without it, one eventually discovers the final turn of the screw: one runs away to find oneself, and finds no one at home.`,
     btn_extract: 'Extract Profile', btn_extracting: 'Analyzing',
     s2_title: 'Profile & Generation', s2_subtitle: 'Distill a 5-dim profile, then pick a data-production mode.',
     profile_label: 'Style Profile',
@@ -378,8 +399,19 @@ export default function Home() {
               value={refs}
               onChange={e => setRefs(e.target.value)}
             />
-            <div className="flex items-center justify-between px-600 py-300 border-t border-roboflow-100">
-              <span className="text-100 font-mono text-roboflow-500">{refs.length} {t.char_unit}</span>
+            <div className="flex flex-wrap items-center justify-between gap-300 px-600 py-300 border-t border-roboflow-100">
+              <div className="flex items-center gap-300">
+                <span className="text-100 font-mono text-roboflow-500">{refs.length} {t.char_unit}</span>
+                {!refs && (
+                  <button
+                    onClick={() => setRefs(t.sample_text)}
+                    className="inline-flex items-center gap-100 px-300 py-100 rounded-pill bg-pushpin-50 text-pushpin-450 text-100 font-bold transition-all duration-300 ease-apple hover:bg-pushpin-100 hover:scale-105 active:scale-95"
+                  >
+                    <Sparkles className="w-3 h-3" />
+                    {t.btn_fill_sample}
+                  </button>
+                )}
+              </div>
               <button
                 onClick={extract}
                 disabled={loading !== null || !refs.trim()}
