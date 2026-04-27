@@ -6,7 +6,7 @@
 **把一种写作风格,蒸馏成可训练的微调数据集。**
 
 [![Live · Global](https://img.shields.io/badge/Live_Demo-Vercel-000000?style=for-the-badge&logo=vercel)](https://styleforge-red.vercel.app)
-[![Live · 中国](https://img.shields.io/badge/中国镜像-EdgeOne-1E90FF?style=for-the-badge&logo=tencentqq)](https://styleforge-o67cciuyxr.edgeone.dev)
+[![Live · 中国](https://img.shields.io/badge/中国镜像-EdgeOne-1E90FF?style=for-the-badge&logo=tencentqq)](https://styleforge.edgeone.dev)
 [![Built with](https://img.shields.io/badge/Built_with-Claude_Code-D97757?style=for-the-badge)](https://claude.com/claude-code)
 
 </div>
@@ -18,7 +18,7 @@
 | Region | Link | Notes |
 |---|---|---|
 | 🌍 Global | **[styleforge-red.vercel.app](https://styleforge-red.vercel.app)** | Vercel, fastest globally |
-| 🇨🇳 国内访问 | **[styleforge-o67cciuyxr.edgeone.dev](https://styleforge-o67cciuyxr.edgeone.dev)** | 腾讯 EdgeOne, 国内秒开 |
+| 🇨🇳 国内访问 | **[styleforge.edgeone.dev](https://styleforge.edgeone.dev)** | 腾讯 EdgeOne, 国内秒开 |
 
 > 🌏 Both deployments auto-sync on every push to `main`.
 
