@@ -394,7 +394,7 @@ export default function Home() {
 
           <div className="rounded-400 bg-mochimalist shadow-floating overflow-hidden">
             <textarea
-              className="w-full h-96 p-600 text-300 bg-transparent resize-y outline-none placeholder:text-roboflow-400 leading-relaxed"
+              className="w-full h-80 p-600 text-300 bg-transparent resize-y outline-none placeholder:text-roboflow-400 leading-relaxed"
               placeholder={t.placeholder_refs}
               value={refs}
               onChange={e => setRefs(e.target.value)}
